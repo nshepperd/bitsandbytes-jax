@@ -17,6 +17,7 @@ dependencies = [
 test = [
     "pytest>=7.0.0",
     "nanobind>=2.0",
+    "safetensors",
 ]
 
 [tool.scikit-build]

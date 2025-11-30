@@ -61,6 +61,7 @@ def test_dequantize_basic(dtype, quant_type):
         jnp.ravel(to_jax(quantized)),
         absmax=jnp.ravel(to_jax(state.absmax)),
         code=jnp.ravel(to_jax(state.code)) if state.code is not None else None,
+        offset=None,
         quantize_type=quant_type if quant_type in ("nf4",) else None,
         blocksize=blocksize,
         shape=torch_tensor.shape,
@@ -75,6 +76,31 @@ def test_dequantize_basic(dtype, quant_type):
     np_jax = np.array(jax_dequant.astype(jnp.float32))
 
     np.testing.assert_allclose(np_jax, np_torch)
+
+def test_fromdict():
+    import safetensors as st
+    path = "/data/models/Llama-3.2-11B-Vision-bnb-4bit/model-00001-of-00002.safetensors"
+    state_dict = {}
+    with st.safe_open(path, framework='flax') as f:
+        for key in f.keys():
+            prefix = 'vision_model.transformer.layers.25.mlp.fc1.weight'
+            if key.startswith(prefix):
+                state_dict[key[len(prefix):]] = f.get_tensor(key)
+    weight = state_dict.pop('')
+    q = bnb_jax.QuantizedArray.from_dict(weight, state_dict)
+    assert jnp.all(jnp.isfinite(q.dequantize()))
+    jax_dequant = jnp.asarray(q)
+    torch_weight = to_torch(weight)
+    torch_state_dict = jax.tree_util.tree_map(to_torch, state_dict)
+    torch_qstate = bnb.QuantState.from_dict(torch_state_dict, device='cpu')
+    torch_dequant = bnb.dequantize_4bit(
+        torch_weight, torch_qstate
+    )
+    np.testing.assert_allclose(
+        jax_dequant,
+        to_jax(torch_dequant),
+    )
+
 
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])
