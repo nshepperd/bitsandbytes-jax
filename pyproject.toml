@@ -1,0 +1,24 @@
+[build-system]
+requires = ["scikit-build-core>=0.10", "nanobind>=2.0"]
+build-backend = "scikit_build_core.build"
+
+[project]
+name = "bitsandbytes-jax"
+version = "0.1.0"
+description = "JAX bindings for bitsandbytes 4-bit dequantization kernels"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "jax[cuda12]",
+    "bitsandbytes",
+]
+
+[dependency-groups]
+test = [
+    "pytest>=7.0.0",
+    "nanobind>=2.0",
+]
+
+[tool.scikit-build]
+wheel.packages = ["src/bnb_jax"]
+cmake.build-type = "Release"
