@@ -12,73 +12,30 @@ template <typename T> nb::capsule EncapsulateFfiCall(T *fn) {
 }
 
 // Register handler with XLA FFI binding
-XLA_FFI_DEFINE_HANDLER(Dequantize_NF4_FP16, Dequantize_NF4_FP16_Impl,
+XLA_FFI_DEFINE_HANDLER(Dequantize_NF4, Dequantize_NF4_Impl,
                        xla::ffi::Ffi::Bind()
                            .Ctx<xla::ffi::PlatformStream<cudaStream_t>>()
                            .Attr<int64_t>("blocksize")
                            .Arg<xla::ffi::Buffer<xla::ffi::DataType::U8>>()
                            .Arg<xla::ffi::Buffer<xla::ffi::DataType::F32>>()
-                           .Ret<xla::ffi::Buffer<xla::ffi::DataType::F16>>());
+                           .Ret<xla::ffi::AnyBuffer>());
 
-XLA_FFI_DEFINE_HANDLER(Dequantize_NF4_BF16, Dequantize_NF4_BF16_Impl,
-                       xla::ffi::Ffi::Bind()
-                           .Ctx<xla::ffi::PlatformStream<cudaStream_t>>()
-                           .Attr<int64_t>("blocksize")
-                           .Arg<xla::ffi::Buffer<xla::ffi::DataType::U8>>()
-                           .Arg<xla::ffi::Buffer<xla::ffi::DataType::F32>>()
-                           .Ret<xla::ffi::Buffer<xla::ffi::DataType::BF16>>());
-
-XLA_FFI_DEFINE_HANDLER(Dequantize_NF4_FP32, Dequantize_NF4_FP32_Impl,
-                       xla::ffi::Ffi::Bind()
-                           .Ctx<xla::ffi::PlatformStream<cudaStream_t>>()
-                           .Attr<int64_t>("blocksize")
-                           .Arg<xla::ffi::Buffer<xla::ffi::DataType::U8>>()
-                           .Arg<xla::ffi::Buffer<xla::ffi::DataType::F32>>()
-                           .Ret<xla::ffi::Buffer<xla::ffi::DataType::F32>>());
-
-XLA_FFI_DEFINE_HANDLER(Dequantize_FP16, Dequantize_FP16_Impl,
+XLA_FFI_DEFINE_HANDLER(Dequantize_Blockwise, Dequantize_Blockwise_Impl,
                        xla::ffi::Ffi::Bind()
                            .Ctx<xla::ffi::PlatformStream<cudaStream_t>>()
                            .Attr<int64_t>("blocksize")
                            .Arg<xla::ffi::Buffer<xla::ffi::DataType::U8>>()
                            .Arg<xla::ffi::Buffer<xla::ffi::DataType::F32>>()
                            .Arg<xla::ffi::Buffer<xla::ffi::DataType::F32>>()
-                           .Ret<xla::ffi::Buffer<xla::ffi::DataType::F16>>());
-
-XLA_FFI_DEFINE_HANDLER(Dequantize_BF16, Dequantize_BF16_Impl,
-                       xla::ffi::Ffi::Bind()
-                           .Ctx<xla::ffi::PlatformStream<cudaStream_t>>()
-                           .Attr<int64_t>("blocksize")
-                           .Arg<xla::ffi::Buffer<xla::ffi::DataType::U8>>()
-                           .Arg<xla::ffi::Buffer<xla::ffi::DataType::F32>>()
-                           .Arg<xla::ffi::Buffer<xla::ffi::DataType::F32>>()
-                           .Ret<xla::ffi::Buffer<xla::ffi::DataType::BF16>>());
-
-XLA_FFI_DEFINE_HANDLER(Dequantize_FP32, Dequantize_FP32_Impl,
-                       xla::ffi::Ffi::Bind()
-                           .Ctx<xla::ffi::PlatformStream<cudaStream_t>>()
-                           .Attr<int64_t>("blocksize")
-                           .Arg<xla::ffi::Buffer<xla::ffi::DataType::U8>>()
-                           .Arg<xla::ffi::Buffer<xla::ffi::DataType::F32>>()
-                           .Arg<xla::ffi::Buffer<xla::ffi::DataType::F32>>()
-                           .Ret<xla::ffi::Buffer<xla::ffi::DataType::F32>>());
+                           .Ret<xla::ffi::AnyBuffer>());
 
 nb::dict FFIRegistrations(uintptr_t handle) {
     initialize_from_handle(reinterpret_cast<void *>(handle));
 
     nb::dict registrations;
-    registrations["bnb_dequant_nf4_fp16"] =
-        EncapsulateFfiCall(Dequantize_NF4_FP16);
-    registrations["bnb_dequant_nf4_bf16"] =
-        EncapsulateFfiCall(Dequantize_NF4_BF16);
-    registrations["bnb_dequant_nf4_fp32"] =
-        EncapsulateFfiCall(Dequantize_NF4_FP32);
-    registrations["bnb_dequant_fp16"] =
-        EncapsulateFfiCall(Dequantize_FP16);
-    registrations["bnb_dequant_bf16"] =
-        EncapsulateFfiCall(Dequantize_BF16);
-    registrations["bnb_dequant_fp32"] =
-        EncapsulateFfiCall(Dequantize_FP32);
+    registrations["bnb_dequant_nf4"] = EncapsulateFfiCall(Dequantize_NF4);
+    registrations["bnb_dequant_blockwise"] =
+        EncapsulateFfiCall(Dequantize_Blockwise);
     return registrations;
 }
 

@@ -60,27 +60,13 @@ def dequantize_nf4(
     ensure_initialized()
     # Each byte contains 2 4-bit values
     n = quantized.shape[0] * 2
-
-    if dtype == jnp.float16:
-        return jax.ffi.ffi_call(
-            "bnb_dequant_nf4_fp16",
-            jax.ShapeDtypeStruct((n,), jnp.float16),
-            vmap_method="broadcast_all"
-        )(quantized, absmax, blocksize=blocksize)
-    elif dtype == jnp.bfloat16:
-        return jax.ffi.ffi_call(
-            "bnb_dequant_nf4_bf16",
-            jax.ShapeDtypeStruct((n,), jnp.bfloat16),
-            vmap_method="broadcast_all"
-        )(quantized, absmax, blocksize=blocksize)
-    elif dtype == jnp.float32:
-        return jax.ffi.ffi_call(
-            "bnb_dequant_nf4_fp32",
-            jax.ShapeDtypeStruct((n,), jnp.float32),
-            vmap_method="broadcast_all"
-        )(quantized, absmax, blocksize=blocksize)
-    else:
+    if dtype not in (jnp.float16, jnp.bfloat16, jnp.float32):
         raise NotImplementedError(f"dequantize_nf4 not implemented for dtype {dtype}")
+    return jax.ffi.ffi_call(
+        "bnb_dequant_nf4",
+        jax.ShapeDtypeStruct((n,), dtype=dtype),
+        vmap_method="broadcast_all"
+    )(quantized, absmax, blocksize=blocksize)
 
 def dequantize_blockwise(
     quantized: jax.Array,
@@ -89,27 +75,16 @@ def dequantize_blockwise(
     blocksize: int = 64,
     dtype: jnp.dtype = jnp.float16,
 ) -> jax.Array:
+    """Dequantize an 8-bit blockwise quantized array."""
     ensure_initialized()
     # Each byte contains 1 8-bit value
     n = quantized.shape[0]
 
-    if dtype == jnp.float16:
-        return jax.ffi.ffi_call(
-            "bnb_dequant_fp16",
-            jax.ShapeDtypeStruct((n,), jnp.float16),
-            vmap_method="broadcast_all"
-        )(quantized, absmax, code, blocksize=blocksize)
-    elif dtype == jnp.bfloat16:
-        return jax.ffi.ffi_call(
-            "bnb_dequant_bf16",
-            jax.ShapeDtypeStruct((n,), jnp.bfloat16),
-            vmap_method="broadcast_all"
-        )(quantized, absmax, code, blocksize=blocksize)
-    elif dtype == jnp.float32:
-        return jax.ffi.ffi_call(
-            "bnb_dequant_fp32",
-            jax.ShapeDtypeStruct((n,), jnp.float32),
-            vmap_method="broadcast_all"
-        )(quantized, absmax, code, blocksize=blocksize)
-    else:
-        raise NotImplementedError(f"dequantize_8bit not implemented for dtype {dtype}")
+    if dtype not in (jnp.float16, jnp.bfloat16, jnp.float32):
+        raise NotImplementedError(f"dequantize_blockwise not implemented for dtype {dtype}")
+
+    return jax.ffi.ffi_call(
+        "bnb_dequant_blockwise",
+        jax.ShapeDtypeStruct((n,), dtype=dtype),
+        vmap_method="broadcast_all"
+    )(quantized, absmax, code, blocksize=blocksize)
