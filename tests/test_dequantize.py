@@ -1,12 +1,14 @@
 """Tests for bitsandbytes-jax dequantization."""
 
+import bitsandbytes.functional as bnb
 import jax
 import jax.numpy as jnp
 import numpy as np
 import pytest
-import bnb_jax
-import bitsandbytes.functional as bnb
 import torch
+
+import bnb_jax
+
 
 def to_jax(tensor: torch.Tensor) -> jax.Array:
     """Convert a PyTorch tensor to a JAX array."""
@@ -69,7 +71,7 @@ def test_dequantize_basic(dtype, quant_type):
     )
 
     # Dequantize with bnb_jax
-    jax_dequant = jnp.asarray(jax_quantized)
+    jax_dequant = jax_quantized.dequantize()
 
     # Compare results
     np_torch = torch_dequant.to(torch.float32).cpu().numpy()
@@ -89,13 +91,31 @@ def test_fromdict():
     weight = state_dict.pop('')
     q = bnb_jax.QuantizedArray.from_dict(weight, state_dict)
     assert jnp.all(jnp.isfinite(q.dequantize()))
-    jax_dequant = jnp.asarray(q)
+    jax_dequant = q.dequantize()
     torch_weight = to_torch(weight)
     torch_state_dict = jax.tree_util.tree_map(to_torch, state_dict)
-    torch_qstate = bnb.QuantState.from_dict(torch_state_dict, device='cpu')
+    torch_qstate = bnb.QuantState.from_dict(torch_state_dict, device=torch.device('cuda'))
     torch_dequant = bnb.dequantize_4bit(
         torch_weight, torch_qstate
     )
+
+    absmax_jax = q.absmax.dequantize()
+    absmax_torch = bnb.dequantize_blockwise(torch_qstate.absmax, torch_qstate.state2) + torch_qstate.offset
+    np.testing.assert_allclose(
+        absmax_jax,
+        to_jax(absmax_torch),
+    )
+
+    # torch_dequant = bnb.dequantize_4bit(
+    #     torch_weight, bnb.QuantState(absmax=absmax_torch, 
+    #                                  blocksize=torch_qstate.blocksize, 
+    #                                  quant_type=torch_qstate.quant_type,
+    #                                  code=torch_qstate.code,
+    #                                  shape=torch_qstate.shape,
+    #                                  dtype=torch_qstate.dtype,
+    #                                  )
+    # )
+
     np.testing.assert_allclose(
         jax_dequant,
         to_jax(torch_dequant),

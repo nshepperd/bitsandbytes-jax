@@ -49,8 +49,8 @@ class QuantizedArray:
         return replace(self, dtype=dtype)
     def dequantize(self, dtype: jnp.dtype | None = None) -> jax.Array:
         return dequantize(self, dtype=dtype)
-    def __jax_array__(self) -> jax.Array:
-        return dequantize(self)
+    # def __jax_array__(self) -> jax.Array:
+    #     return dequantize(self)
     
     @classmethod
     def from_dict(cls, weight: jax.Array, qs_dict: dict[str, Any]) -> QuantizedArray:
@@ -142,7 +142,7 @@ def dequantize_nf4(
 ) -> jax.Array:
     ensure_initialized()
     # Each byte contains 2 4-bit values
-    n = quantized.shape[0] * 2
+    n = quantized.size * 2
     if dtype not in (jnp.float16, jnp.bfloat16, jnp.float32):
         raise NotImplementedError(f"dequantize_nf4 not implemented for dtype {dtype}")
     return jax.ffi.ffi_call(
@@ -161,11 +161,9 @@ def dequantize_blockwise(
     """Dequantize an 8-bit blockwise quantized array."""
     ensure_initialized()
     # Each byte contains 1 8-bit value
-    n = quantized.shape[0]
-
+    n = quantized.size
     if dtype not in (jnp.float16, jnp.bfloat16, jnp.float32):
         raise NotImplementedError(f"dequantize_blockwise not implemented for dtype {dtype}")
-
     return jax.ffi.ffi_call(
         "bnb_dequant_blockwise",
         jax.ShapeDtypeStruct((n,), dtype=dtype),
