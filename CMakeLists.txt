@@ -5,9 +5,9 @@ set(CMAKE_INSTALL_RPATH "$ORIGIN/nvidia/cuda_runtime/lib")
 # Make sure RPATH is used instead of RUNPATH
 set(CMAKE_INSTALL_RPATH_USE_LINK_PATH FALSE)
 
-if(EXISTS ${Python_ROOT_DIR}/bin/python)
+if(PYTHON_VENV AND EXISTS ${PYTHON_VENV}/bin/python)
     execute_process(
-        COMMAND ${Python_ROOT_DIR}/bin/python -c "import sysconfig; print(sysconfig.get_path('purelib'))"
+        COMMAND ${PYTHON_VENV}/bin/python -c "import sysconfig; print(sysconfig.get_path('purelib'))"
         OUTPUT_VARIABLE PYTHON_SITE_PACKAGES
         OUTPUT_STRIP_TRAILING_WHITESPACE
     )
