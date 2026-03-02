@@ -10,6 +10,7 @@ import json
 import numpy as np
 
 from .dequantize import dequantize_nf4, dequantize_blockwise
+from .quantize import quantize_nf4, quantize_blockwise, create_dynamic_map
 
 valid_qs_type_keys = [f"bitsandbytes__{x}" for x in ("nf4",)]
 valid_qs_keys = [
@@ -51,6 +52,46 @@ class QuantizedArray:
         return dequantize(self, dtype=dtype)
     # def __jax_array__(self) -> jax.Array:
     #     return dequantize(self)
+
+    @classmethod
+    def quantize(cls, array: jax.Array, blocksize: int = 64, quant_type: str | None = "nf4", code: jax.Array | None = None) -> QuantizedArray:
+        """Quantize a JAX array into a QuantizedArray.
+
+        Args:
+            array: Input tensor to quantize.
+            blocksize: Block size for quantization.
+            quant_type: "nf4" for 4-bit NF4, or None for 8-bit blockwise.
+            code: Codebook for 8-bit blockwise quantization (required when quant_type is None).
+        """
+        flat = jnp.ravel(array)
+        if quant_type == "nf4":
+            quantized, absmax = quantize_nf4(flat, blocksize=blocksize)
+            return cls(
+                array=quantized,
+                absmax=absmax,
+                code=None,
+                offset=None,
+                quantize_type="nf4",
+                blocksize=blocksize,
+                shape=array.shape,
+                dtype=array.dtype,
+            )
+        elif quant_type is None:
+            if code is None:
+                code = create_dynamic_map()
+            quantized, absmax = quantize_blockwise(flat, code, blocksize=blocksize)
+            return cls(
+                array=quantized,
+                absmax=absmax,
+                code=code,
+                offset=None,
+                quantize_type=None,
+                blocksize=blocksize,
+                shape=array.shape,
+                dtype=array.dtype,
+            )
+        else:
+            raise NotImplementedError(f"Quantization not implemented for type {quant_type}")
 
     @classmethod
     def from_dict(cls, weight: jax.Array, qs_dict: dict[str, Any]) -> QuantizedArray:

@@ -29,6 +29,23 @@ XLA_FFI_DEFINE_HANDLER(Dequantize_Blockwise, Dequantize_Blockwise_Impl,
                            .Arg<xla::ffi::Buffer<xla::ffi::DataType::F32>>()
                            .Ret<xla::ffi::AnyBuffer>());
 
+XLA_FFI_DEFINE_HANDLER(Quantize_NF4, Quantize_NF4_Impl,
+                       xla::ffi::Ffi::Bind()
+                           .Ctx<xla::ffi::PlatformStream<cudaStream_t>>()
+                           .Attr<int64_t>("blocksize")
+                           .Arg<xla::ffi::AnyBuffer>()                          // input
+                           .Ret<xla::ffi::Buffer<xla::ffi::DataType::U8>>()     // quantized
+                           .Ret<xla::ffi::Buffer<xla::ffi::DataType::F32>>());  // absmax
+
+XLA_FFI_DEFINE_HANDLER(Quantize_Blockwise, Quantize_Blockwise_Impl,
+                       xla::ffi::Ffi::Bind()
+                           .Ctx<xla::ffi::PlatformStream<cudaStream_t>>()
+                           .Attr<int64_t>("blocksize")
+                           .Arg<xla::ffi::AnyBuffer>()                          // input
+                           .Arg<xla::ffi::Buffer<xla::ffi::DataType::F32>>()    // code
+                           .Ret<xla::ffi::Buffer<xla::ffi::DataType::U8>>()     // quantized
+                           .Ret<xla::ffi::Buffer<xla::ffi::DataType::F32>>());  // absmax
+
 nb::dict FFIRegistrations(uintptr_t handle) {
     initialize_from_handle(reinterpret_cast<void *>(handle));
 
@@ -36,6 +53,9 @@ nb::dict FFIRegistrations(uintptr_t handle) {
     registrations["bnb_dequant_nf4"] = EncapsulateFfiCall(Dequantize_NF4);
     registrations["bnb_dequant_blockwise"] =
         EncapsulateFfiCall(Dequantize_Blockwise);
+    registrations["bnb_quant_nf4"] = EncapsulateFfiCall(Quantize_NF4);
+    registrations["bnb_quant_blockwise"] =
+        EncapsulateFfiCall(Quantize_Blockwise);
     return registrations;
 }
 

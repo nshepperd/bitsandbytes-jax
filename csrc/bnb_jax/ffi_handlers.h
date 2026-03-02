@@ -25,6 +25,20 @@ Dequantize_Blockwise_Impl(cudaStream_t stream, int64_t blocksize,
                           xla::ffi::Buffer<xla::ffi::DataType::F32> code,
                           xla::ffi::Result<xla::ffi::AnyBuffer> output);
 
+// Quantization handlers
+xla::ffi::Error
+Quantize_NF4_Impl(cudaStream_t stream, int64_t blocksize,
+                  xla::ffi::AnyBuffer input,
+                  xla::ffi::Result<xla::ffi::Buffer<xla::ffi::DataType::U8>> quantized,
+                  xla::ffi::Result<xla::ffi::Buffer<xla::ffi::DataType::F32>> absmax);
+
+xla::ffi::Error
+Quantize_Blockwise_Impl(cudaStream_t stream, int64_t blocksize,
+                        xla::ffi::AnyBuffer input,
+                        xla::ffi::Buffer<xla::ffi::DataType::F32> code,
+                        xla::ffi::Result<xla::ffi::Buffer<xla::ffi::DataType::U8>> quantized,
+                        xla::ffi::Result<xla::ffi::Buffer<xla::ffi::DataType::F32>> absmax);
+
 } // namespace bnb_jax
 
 #endif // BNB_JAX_FFI_HANDLERS_H_
