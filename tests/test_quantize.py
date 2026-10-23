@@ -8,7 +8,7 @@ import pytest
 import torch
 
 import bnb_jax
-from bnb_jax.quantize import _NF4_THRESHOLDS
+from bnb_jax.kernels.quantize import _NF4_THRESHOLDS
 
 DTYPES = {
     jnp.float16: torch.float16,
@@ -43,10 +43,10 @@ def check_nf4(torch_tensor, blocksize):
     torch_quantized, torch_state = bnb.quantize_4bit(
         torch_tensor, blocksize=blocksize, quant_type="nf4"
     )
-    jax_qa = bnb_jax.QuantizedArray.quantize(jax_tensor, blocksize=blocksize, quant_type="nf4")
+    jax_qa = bnb_jax.quantize(jax_tensor, "nf4", blocksize)
 
     # The quantized bytes and absmax should match exactly
-    np.testing.assert_array_equal(np.array(jax_qa.array), to_jax(torch_quantized).ravel())
+    np.testing.assert_array_equal(np.array(jax_qa.data), to_jax(torch_quantized).ravel())
     np.testing.assert_array_equal(np.array(jax_qa.absmax), np.array(to_jax(torch_state.absmax)).ravel())
     return jax_qa, torch_quantized, torch_state
 
@@ -55,10 +55,9 @@ def check_blockwise(torch_tensor, blocksize):
     jax_tensor = to_jax(torch_tensor)
     torch_quantized, torch_state = bnb.quantize_blockwise(torch_tensor, blocksize=blocksize)
     # with bitsandbytes' own codebook: see test_create_dynamic_map
-    jax_qa = bnb_jax.QuantizedArray.quantize(
-        jax_tensor, blocksize=blocksize, quant_type=None, code=to_jax(torch_state.code))
+    jax_qa = bnb_jax.quantize(jax_tensor, "8bit", blocksize, code=to_jax(torch_state.code))
 
-    np.testing.assert_array_equal(np.array(jax_qa.array), to_jax(torch_quantized).ravel())
+    np.testing.assert_array_equal(np.array(jax_qa.data), to_jax(torch_quantized).ravel())
     np.testing.assert_array_equal(np.array(jax_qa.absmax), np.array(to_jax(torch_state.absmax)).ravel())
     return jax_qa, torch_quantized, torch_state
 
@@ -167,14 +166,45 @@ def test_quantize_blockwise_roundtrip(dtype):
     )
 
 
+@pytest.mark.parametrize("qtype", ["nf4", "8bit"])
+def test_quantize_double_quant(qtype):
+    """double_quant=True against bitsandbytes' compress_statistics=True / nested=True.
+    The codes are bitwise; the absmax offset is a float32 mean, whose rounding
+    depends on summation order, so the decoded absmax is only close."""
+    torch_tensor = torch.randn(1 << 16, dtype=torch.bfloat16, device="cuda")
+    if qtype == "nf4":
+        torch_quantized, torch_state = bnb.quantize_4bit(
+            torch_tensor, blocksize=64, quant_type="nf4", compress_statistics=True)
+        torch_dequant = bnb.dequantize_4bit(torch_quantized, torch_state)
+        jax_qa = bnb_jax.quantize(to_jax(torch_tensor), "nf4", 64, double_quant=True)
+    else:
+        torch_quantized, torch_state = bnb.quantize_blockwise(torch_tensor, blocksize=256, nested=True)
+        torch_dequant = bnb.dequantize_blockwise(torch_quantized, torch_state)
+        jax_qa = bnb_jax.quantize(to_jax(torch_tensor), "8bit", 256, double_quant=True,
+                                  code=to_jax(torch_state.code))
+    np.testing.assert_array_equal(np.array(jax_qa.data), to_jax(torch_quantized).ravel())
+
+    assert jax_qa.double_quantized
+    absmax = jax_qa.absmax
+    assert absmax.qtype == "8bit" and absmax.blocksize == 256
+    np.testing.assert_allclose(absmax.offset, torch_state.offset.item(), rtol=1e-6)
+    torch_absmax = bnb.dequantize_blockwise(torch_state.absmax, torch_state.state2) + torch_state.offset
+    np.testing.assert_allclose(absmax.dequantize(), to_jax(torch_absmax), rtol=1e-5, atol=1e-6)
+    np.testing.assert_allclose(
+        np.array(jax_qa.dequantize(jnp.float32)), torch_dequant.float().cpu().numpy(), rtol=1e-2, atol=1e-3)
+
+
 def test_quantize_jit_shape():
     """Quantize under jit, of a multi-dimensional array."""
     x = jax.random.normal(jax.random.key(0), (64, 96), jnp.bfloat16)
-    qa = jax.jit(bnb_jax.QuantizedArray.quantize)(x)
-    assert qa.shape == (64, 96)
-    expected = bnb_jax.QuantizedArray.quantize(x.ravel())
-    np.testing.assert_array_equal(qa.array, expected.array)
+    qa = jax.jit(bnb_jax.quantize, static_argnames=("qtype", "blocksize"))(x)
+    assert qa.shape == (64, 96) and qa.ndim == 2 and qa.size == 64 * 96
+    assert qa.dtype == jnp.bfloat16
+    expected = bnb_jax.quantize(x.ravel())
+    np.testing.assert_array_equal(qa.data, expected.data)
     assert qa.dequantize().shape == (64, 96)
+    assert repr(qa) == "QuantizedArray(nf4, shape=(64, 96), dtype=bfloat16, blocksize=64)"
+    assert qa.nbytes == 64 * 96 // 2 + 64 * 96 // 64 * 4
 
 
 if __name__ == "__main__":

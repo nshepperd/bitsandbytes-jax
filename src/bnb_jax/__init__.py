@@ -1,14 +1,18 @@
-"""bitsandbytes quantization for JAX, as CuTe DSL kernels."""
+"""bitsandbytes quantization for JAX, as CuTe DSL kernels.
 
-from .array import QuantizedArray
-from .dequantize import dequantize_nf4, dequantize_blockwise
-from .quantize import quantize_nf4, quantize_blockwise, create_dynamic_map
+Quantized tensors are :class:`QuantizedArray` pytrees, made by :func:`quantize`
+or loaded from a HuggingFace bnb-4bit checkpoint with
+:meth:`QuantizedArray.from_dict`, and decoded with
+:meth:`QuantizedArray.dequantize` — bitwise equal to bitsandbytes either way.
+The kernels themselves, on flat arrays, are in :mod:`bnb_jax.kernels`.
+"""
+
+from .array import QType, QuantizedArray, quantize
+from .kernels import create_dynamic_map
 
 __all__ = [
-    "dequantize_nf4",
-    "dequantize_blockwise",
-    "quantize_nf4",
-    "quantize_blockwise",
-    "create_dynamic_map",
+    "QType",
     "QuantizedArray",
+    "create_dynamic_map",
+    "quantize",
 ]

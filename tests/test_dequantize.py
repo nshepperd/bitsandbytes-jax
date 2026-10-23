@@ -43,14 +43,14 @@ def bnb_quantized(quant_type, n, blocksize, torch_dtype=torch.float32):
         torch_dequant = bnb.dequantize_blockwise(quantized, state)
 
     jax_quantized = bnb_jax.QuantizedArray(
-        jnp.ravel(to_jax(quantized)),
+        data=jnp.ravel(to_jax(quantized)),
         absmax=jnp.ravel(to_jax(state.absmax)),
-        code=jnp.ravel(to_jax(state.code)) if quant_type == "blockwise" else None,
+        code=jnp.ravel(to_jax(state.code)) if quant_type == "8bit" else None,
         offset=None,
-        quantize_type="nf4" if quant_type == "nf4" else None,
+        qtype=quant_type,
         blocksize=blocksize,
         shape=tuple(torch_tensor.shape),
-        dtype=jnp.float32,
+        dtype=jnp.dtype(jnp.float32),
     )
     return jax_quantized, torch_dequant
 
@@ -63,7 +63,7 @@ def assert_bitwise(jax_array, torch_tensor):
 
 
 @pytest.mark.parametrize("dtype", DTYPES)
-@pytest.mark.parametrize("quant_type", ["nf4", "blockwise"])
+@pytest.mark.parametrize("quant_type", ["nf4", "8bit"])
 def test_dequantize_basic(dtype, quant_type):
     """Dequantize bitsandbytes-quantized data at the output dtype."""
     jax_quantized, torch_dequant = bnb_quantized(quant_type, 256, 64, DTYPES[dtype])
@@ -73,10 +73,10 @@ def test_dequantize_basic(dtype, quant_type):
 
 
 @pytest.mark.parametrize("blocksize", [32, 64, 128, 256, 512, 1024, 2048, 4096])
-@pytest.mark.parametrize("quant_type", ["nf4", "blockwise"])
+@pytest.mark.parametrize("quant_type", ["nf4", "8bit"])
 def test_dequantize_blocksizes(blocksize, quant_type):
     """Every blocksize, with a partial (odd-length) last block."""
-    if quant_type == "blockwise" and blocksize < 64:
+    if quant_type == "8bit" and blocksize < 64:
         pytest.skip("bitsandbytes' 8-bit quantization needs blocksize >= 64")
     for n in [3 * blocksize + 5, 1 << 18]:
         jax_quantized, torch_dequant = bnb_quantized(quant_type, n, blocksize)
@@ -86,11 +86,31 @@ def test_dequantize_blocksizes(blocksize, quant_type):
 def test_dequantize_jit_vmap():
     """Dequantize under jit, and under vmap over stacked weights."""
     xs = jax.random.normal(jax.random.key(0), (3, 4096), jnp.float32)
-    qs = [bnb_jax.QuantizedArray.quantize(x) for x in xs]
+    qs = [bnb_jax.quantize(x) for x in xs]
     stacked = jax.tree.map(lambda *a: jnp.stack(a), *qs)
     out = jax.jit(jax.vmap(lambda q: q.dequantize()))(stacked)
     for q, o in zip(qs, out):
         np.testing.assert_array_equal(o, q.dequantize())
+
+
+@pytest.mark.parametrize("packed", [True, False])
+@pytest.mark.parametrize("compress_statistics", [True, False])
+def test_fromdict_quant_state(packed, compress_statistics):
+    """from_dict on bitsandbytes' own QuantState.as_dict, in both the packed
+    form saved to safetensors and the unpacked one."""
+    torch_tensor = torch.randn(96, 128, dtype=torch.bfloat16, device="cuda")
+    quantized, state = bnb.quantize_4bit(
+        torch_tensor, blocksize=64, quant_type="nf4", compress_statistics=compress_statistics)
+    torch_dequant = bnb.dequantize_4bit(quantized, state)
+    qs_dict = {k: to_jax(v) if isinstance(v, torch.Tensor) else v
+               for k, v in state.as_dict(packed=packed).items()}
+
+    q = bnb_jax.QuantizedArray.from_dict(to_jax(quantized), qs_dict)
+    assert q.shape == (96, 128) and q.dtype == jnp.bfloat16
+    assert q.double_quantized == compress_statistics
+    jax_dequant = q.dequantize()
+    assert jax_dequant.dtype == jnp.bfloat16
+    assert_bitwise(jax_dequant, torch_dequant)
 
 
 def test_legacy_import():
