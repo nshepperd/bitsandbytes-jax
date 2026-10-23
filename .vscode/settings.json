@@ -6,10 +6,5 @@
   "python.testing.pytestEnabled": true,
   "files.exclude": {
     "__pycache__": true
-  },
-  "cmake.configureArgs": [
-    "-DPYTHON_VENV=${workspaceFolder}/.venv",
-    "-DNO_OPTIONS_FILE=1",
-    "-DCMAKE_EXPORT_COMPILE_COMMANDS=ON"
-  ]
+  }
 }
