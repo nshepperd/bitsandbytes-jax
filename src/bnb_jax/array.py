@@ -6,6 +6,7 @@ import jax
 import jax.numpy as jnp
 from dataclasses import dataclass, field, replace
 import json
+import math
 
 import numpy as np
 
@@ -159,6 +160,7 @@ def dequantize(array: QuantizedArray, dtype: jnp.dtype | None = None) -> jax.Arr
             absmax,
             blocksize=array.blocksize,
             dtype=dtype or array.dtype,
+            n=math.prod(array.shape),
         ).reshape(array.shape)
     elif array.quantize_type is None:
         assert array.code is not None, "Codebook must be provided for 8-bit dequantization."

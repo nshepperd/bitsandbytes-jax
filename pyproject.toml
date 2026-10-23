@@ -1,27 +1,47 @@
-[build-system]
-requires = ["scikit-build-core>=0.10", "nanobind>=2.0"]
-build-backend = "scikit_build_core.build"
-
 [project]
 name = "bitsandbytes-jax"
-version = "0.1.0"
-description = "JAX bindings for bitsandbytes 4-bit dequantization kernels"
+version = "0.2.0"
+description = "bitsandbytes NF4 / 8-bit blockwise quantization for JAX, as CuTe DSL kernels, bitwise-exact vs bitsandbytes"
 readme = "README.md"
-requires-python = ">=3.9"
-dependencies = [
-    "jax",
-    "bitsandbytes",
-    "numpy",
+authors = [
+    { name = "Emily Shepperd", email = "nshepperd@gmail.com" }
 ]
+requires-python = ">=3.11"
+dependencies = [
+    # cutejax's handlers speak XLA FFI API 0.2+, which jaxlib first has in 0.8.1.
+    "jax>=0.8.1",
+    "numpy",
+    "cutejax>=0.1.5",
+    "nvidia-cutlass-dsl>=4.8.0",
+]
+
+# The CuTe DSL's cu13 runtime libraries sit behind an extra (the cu12 ones are
+# an unconditional requirement of the nvidia-cutlass-dsl wheel). Pick the one
+# matching the CUDA build of the installed jax: bitsandbytes-jax[cu13] for
+# jax[cuda13].
+[project.optional-dependencies]
+cu13 = ["cutejax[cu13]"]
+
+[build-system]
+requires = ["uv_build>=0.9.0,<0.14.0"]
+build-backend = "uv_build"
+
+[tool.uv.build-backend]
+module-name = "bnb_jax"
 
 [dependency-groups]
 test = [
+    "jax[cuda13]>=0.9.1",
+    "nvidia-cutlass-dsl[cu13]>=4.8.0",
     "pytest>=7.0.0",
-    "nanobind>=2.0",
     "safetensors",
-    "jax[cuda12]"
+    # the reference implementation the tests compare against
+    "bitsandbytes",
+    "torch",
 ]
 
-[tool.scikit-build]
-wheel.packages = ["src/bnb_jax"]
-cmake.build-type = "Release"
+[tool.uv]
+default-groups = ["test"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
