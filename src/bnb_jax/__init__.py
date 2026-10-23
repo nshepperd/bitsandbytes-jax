@@ -7,6 +7,7 @@ or loaded from a HuggingFace bnb-4bit checkpoint with
 The kernels themselves, on flat arrays, are in :mod:`bnb_jax.kernels`.
 """
 
+from ._matmul import matmul
 from .array import QType, QuantizedArray, quantize
 from .kernels import create_dynamic_map
 
@@ -14,5 +15,6 @@ __all__ = [
     "QType",
     "QuantizedArray",
     "create_dynamic_map",
+    "matmul",
     "quantize",
 ]

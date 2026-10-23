@@ -4,6 +4,7 @@ Each is bitwise equal to the bitsandbytes CUDA kernel of the same name.
 """
 
 from .dequantize import NF4_TABLE, dequantize_blockwise, dequantize_nf4
+from .gemv import gemv_nf4
 from .quantize import create_dynamic_map, quantize_blockwise, quantize_nf4
 
 __all__ = [
@@ -11,6 +12,7 @@ __all__ = [
     "create_dynamic_map",
     "dequantize_blockwise",
     "dequantize_nf4",
+    "gemv_nf4",
     "quantize_blockwise",
     "quantize_nf4",
 ]
