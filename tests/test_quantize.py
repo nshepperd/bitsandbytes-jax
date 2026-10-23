@@ -54,6 +54,7 @@ def check_nf4(torch_tensor, blocksize):
 def check_blockwise(torch_tensor, blocksize):
     jax_tensor = to_jax(torch_tensor)
     torch_quantized, torch_state = bnb.quantize_blockwise(torch_tensor, blocksize=blocksize)
+    assert torch_state.code is not None
     # with bitsandbytes' own codebook: see test_create_dynamic_map
     jax_qa = bnb_jax.quantize(jax_tensor, "8bit", blocksize, code=to_jax(torch_state.code))
 
@@ -180,14 +181,17 @@ def test_quantize_double_quant(qtype):
     else:
         torch_quantized, torch_state = bnb.quantize_blockwise(torch_tensor, blocksize=256, nested=True)
         torch_dequant = bnb.dequantize_blockwise(torch_quantized, torch_state)
+        assert torch_state.code is not None
         jax_qa = bnb_jax.quantize(to_jax(torch_tensor), "8bit", 256, double_quant=True,
                                   code=to_jax(torch_state.code))
     np.testing.assert_array_equal(np.array(jax_qa.data), to_jax(torch_quantized).ravel())
 
     assert jax_qa.double_quantized
     absmax = jax_qa.absmax
+    assert isinstance(absmax, bnb_jax.QuantizedArray)
     assert absmax.qtype == "8bit" and absmax.blocksize == 256
-    np.testing.assert_allclose(absmax.offset, torch_state.offset.item(), rtol=1e-6)
+    assert absmax.offset is not None and torch_state.offset is not None
+    np.testing.assert_allclose(np.asarray(absmax.offset), torch_state.offset.item(), rtol=1e-6)
     torch_absmax = bnb.dequantize_blockwise(torch_state.absmax, torch_state.state2) + torch_state.offset
     np.testing.assert_allclose(absmax.dequantize(), to_jax(torch_absmax), rtol=1e-5, atol=1e-6)
     np.testing.assert_allclose(

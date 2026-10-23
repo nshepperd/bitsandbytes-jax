@@ -38,14 +38,17 @@ def bnb_quantized(quant_type, n, blocksize, torch_dtype=torch.float32):
     if quant_type == "nf4":
         quantized, state = bnb.quantize_4bit(torch_tensor, blocksize=blocksize, quant_type="nf4")
         torch_dequant = bnb.dequantize_4bit(quantized, state, quant_type="nf4")
+        code = None
     else:
         quantized, state = bnb.quantize_blockwise(torch_tensor, blocksize=blocksize)
         torch_dequant = bnb.dequantize_blockwise(quantized, state)
+        assert state.code is not None
+        code = jnp.ravel(to_jax(state.code))
 
     jax_quantized = bnb_jax.QuantizedArray(
         data=jnp.ravel(to_jax(quantized)),
         absmax=jnp.ravel(to_jax(state.absmax)),
-        code=jnp.ravel(to_jax(state.code)) if quant_type == "8bit" else None,
+        code=code,
         offset=None,
         qtype=quant_type,
         blocksize=blocksize,
@@ -126,7 +129,7 @@ def test_fromdict():
     import safetensors as st
     state_dict = {}
     with st.safe_open(FROMDICT_PATH, framework='flax') as f:
-        for key in f.keys():
+        for key in f.keys():  # noqa: SIM118 -- a safe_open handle is not iterable
             prefix = 'vision_model.transformer.layers.25.mlp.fc1.weight'
             if key.startswith(prefix):
                 state_dict[key[len(prefix):]] = f.get_tensor(key)
@@ -141,6 +144,8 @@ def test_fromdict():
         torch_weight, torch_qstate
     )
 
+    assert isinstance(q.absmax, bnb_jax.QuantizedArray)
+    assert torch_qstate.offset is not None
     absmax_jax = q.absmax.dequantize()
     absmax_torch = bnb.dequantize_blockwise(torch_qstate.absmax, torch_qstate.state2) + torch_qstate.offset
     np.testing.assert_array_equal(

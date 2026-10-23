@@ -45,3 +45,22 @@ default-groups = ["test"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+
+[tool.ty.environment]
+# cutlass ships inside the nvidia-cutlass-dsl wheel and is put on sys.path at
+# runtime by a .pth file, which ty does not execute.
+extra-paths = [".venv/lib/python3.11/site-packages/nvidia_cutlass_dsl/dsl_packages"]
+
+[tool.ty.src]
+# a gitignored bitsandbytes checkout lives here
+exclude = ["bitsandbytes_src"]
+
+# The CuTe DSL's traced types (tensor elements, shapes) support subscripting
+# and bitwise ops at trace time without declaring them, so ty reports them
+# against kernel code that is correct and GPU-tested.
+[[tool.ty.overrides]]
+include = ["src/bnb_jax/kernels/**"]
+
+[tool.ty.overrides.rules]
+not-subscriptable = "ignore"
+unsupported-operator = "ignore"
