@@ -4,6 +4,7 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 import pytest
+from jax.ad_checkpoint import print_saved_residuals
 
 import bnb_jax
 from bnb_jax.kernels.gemv import GEMV_MAX_M
@@ -64,6 +65,28 @@ def test_matmul_fallback(case):
     w = weight(256, 512, qtype=qtype)
     x = jax.random.normal(jax.random.key(2), (m, 512), dtype)
     np.testing.assert_array_equal(bnb_jax.matmul(x, w), x @ w.dequantize(dtype).T)
+
+
+@pytest.mark.parametrize("m", [1, GEMV_MAX_M + 1])
+def test_matmul_grad(m):
+    """grad in x, through the GEMV and through the fallback: the same as the
+    fallback's own gradient, bitwise."""
+    w = weight(256, 512)
+    x = jax.random.normal(jax.random.key(3), (2, m, 512), jnp.bfloat16)
+    g = jax.grad(lambda x: bnb_jax.matmul(x, w).astype(jnp.float32).sum())(x)
+    g_ref = jax.grad(lambda x: (x @ w.dequantize(x.dtype).T).astype(jnp.float32).sum())(x)
+    assert g.dtype == jnp.bfloat16
+    np.testing.assert_array_equal(g, g_ref)
+
+
+def test_matmul_saves_no_dense_weight(capsys):
+    """Only the quantized weight is kept for the backward pass, as under
+    jax.remat, even on the dequantize-then-matmul path."""
+    w = weight(256, 512)
+    x = jax.random.normal(jax.random.key(4), (GEMV_MAX_M + 1, 512), jnp.bfloat16)
+    print_saved_residuals(lambda x: bnb_jax.matmul(x, w).astype(jnp.float32).sum(), x)
+    saved = capsys.readouterr().out
+    assert "bf16[" not in saved, saved
 
 
 def test_matmul_shape_errors():

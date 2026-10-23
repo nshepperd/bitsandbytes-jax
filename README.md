@@ -63,6 +63,11 @@ absmax once, without rounding weights to bf16 first, so it is *closer* to the
 exact product than the fallback rather than bitwise equal to it. With a one-hot
 `x` it returns the dequantized weights bitwise.
 
+It is differentiable in `x` on either path, with a custom VJP: the gradient is
+`g @ w.dequantize(g.dtype)`, so all the backward pass keeps is the quantized
+weight. That is what wrapping `x @ w.dequantize().T` in `jax.remat` buys, so
+callers of `matmul` don't need to. No gradient flows to `w`.
+
 `bench/bench_gemv.py` on an RTX 5070 Ti, W 4096×14336 double-quantized NF4
 (30 MB; 117 MB as bf16), weights rotated so they come from DRAM:
 

@@ -28,13 +28,24 @@ def matmul(x: jax.Array, w: QuantizedArray) -> jax.Array:
     The GEMV accumulates in float32 and applies each block's absmax once,
     without rounding the weights to ``x.dtype``, so it is closer to the exact
     product than the fallback, though not bitwise equal to it.
+
+    Differentiable in ``x`` (reverse mode): the gradient is
+    ``g @ w.dequantize(g.dtype)``, decoding the weight again in the backward
+    pass, so what is saved for it is the quantized weight and never a dense
+    copy -- the effect of wrapping the call in ``jax.remat``. No gradient
+    flows to ``w``.
     """
     if w.ndim != 2:
         raise ValueError(f"w must be a 2-D weight, got shape {w.shape}")
     n, k = w.shape
     if x.shape[-1] != k:
         raise ValueError(f"contraction mismatch: x {x.shape} @ w.T {w.shape[::-1]}")
-    xm = x.reshape(-1, k)
+    return _matmul_2d(x.reshape(-1, k), w).reshape(*x.shape[:-1], n)
+
+
+@jax.custom_vjp
+def _matmul_2d(xm: jax.Array, w: QuantizedArray) -> jax.Array:
+    n = w.shape[0]
     if _fused_applies(xm, w):
         absmax = w.absmax
         if isinstance(absmax, QuantizedArray):
@@ -45,8 +56,19 @@ def matmul(x: jax.Array, w: QuantizedArray) -> jax.Array:
         else:
             out = gemv_nf4(xm, w.data, absmax, n, w.blocksize)
     else:
-        out = xm @ w.dequantize(x.dtype).T
-    return out.reshape(*x.shape[:-1], n)
+        out = xm @ w.dequantize(xm.dtype).T
+    return out
+
+
+def _matmul_2d_fwd(xm, w):
+    return _matmul_2d(xm, w), w
+
+
+def _matmul_2d_bwd(w, g):
+    return g @ w.dequantize(g.dtype), None
+
+
+_matmul_2d.defvjp(_matmul_2d_fwd, _matmul_2d_bwd)
 
 
 def _fused_applies(xm: jax.Array, w: QuantizedArray) -> bool:
